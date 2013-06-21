@@ -17,11 +17,22 @@ class Api::Json::VisualizationsController < Api::ApplicationController
   before_filter :link_ghost_tables, only: [:index, :show]
 
   def index
-    collection  = Visualization::Collection.new.fetch(
-      params.dup.merge(scope_for(current_user))
-    )
-    response    = {
-      visualizations: collection.to_poro,
+    collection      = Visualization::Collection.new.fetch(
+                        params.dup.merge(scope_for(current_user))
+                      )
+    map_ids         = collection.map(&:map_id).to_a
+    tables          = tables_by_map_id(map_ids)
+
+    representation  = collection.map { |member|
+      member.to_hash(
+        related:  false,
+        user:     current_user,
+        table:    tables[member.map_id]
+      )
+    }
+
+    response        = {
+      visualizations: representation,
       total_entries:  collection.total_entries
     }
     render_jsonp(response)
@@ -167,9 +178,14 @@ class Api::Json::VisualizationsController < Api::ApplicationController
   end #default_privacy
 
   def name_candidate
-    #return if params[:name].nil? || params[:name].empty?
     Visualization::NameGenerator.new(current_user)
                       .name(params[:name])
   end #name_candidate
+
+  def tables_by_map_id(map_ids)
+    Hash[
+      ::Table.where(map_id: map_ids).map { |table| [table.map_id, table] }
+    ]
+  end
 end # Api::Json::VisualizationsController
 
